@@ -7,10 +7,16 @@ TODO:
     Consider private key cryptography for Tx verification
 '''
 
-import time
 import functools
+import hashlib
+import time
+
+from Crypto.Hash      import SHA
+from Crypto.PublicKey import RSA
+from Crypto.Signature import pss
 
 
+# @Refacotr: Use proper functions
 HASH = lambda x: abs(hash(x))
 TIME = lambda: int(time.time() * 1000) # millisecond
 
@@ -40,18 +46,17 @@ class Tx:
                 self.recver,
                 self.amount,
                 self.timestamp,
-                self.msg)
-            )
+                self.msg
+            ))
             return self._hash
 
     def __repr__(self):
         return 'Tx(Hash: {}, Sender: {}, Receiver: {}, Amount: {}, Time: {})'.format(
                 self.__hash__(), self.sender, self.recver, self.amount, self.timestamp)
 
-
-# @Refactor: Put these into Tx classmethod
-def hash_txs(*txs):
-    return functools.reduce(lambda x, y: HASH((x, y)), txs)
+    @classmethod
+    def hash_txs(*txs):
+        return functools.reduce(lambda x, y: HASH((x, y)), txs)
 
 
 class Block:
@@ -75,8 +80,8 @@ class Block:
             self._hash = HASH((
                 self.prev_hash,
                 self.timestamp,
-                self.data)
-            )
+                self.data
+            ))
             return self._hash
 
     def __repr__(self):
@@ -98,6 +103,7 @@ class Chain:
         self.addr   = addr
 
     def isValid(self):
+        '''Check for chain validity'''
         return self.addr is not None
 
     def isValidTx(self, tx):
@@ -109,6 +115,9 @@ class Chain:
                 return True
         except KeyError:
             return False
+
+    def isValidBlock(self, block, parent):
+        return block.prev_hash == hash(parent)
 
     def transact(self, sender, recver, amount, timestamp, msg=0):
         '''Make transaction on chain.'''
@@ -131,8 +140,8 @@ class Chain:
     # @Hardcoded: time needs to use UTC time
     # @Time: Should we use time anyway?
     def makeBlock(self):
-        data = hash_txs(*self.txs)
-        self.blocks.append(Block(self.last_hash, TIME(), data))
+        root_hash = Tx.hash_txs(*self.txs)
+        self.blocks.append(Block(self.last_hash, TIME(), root_hash))
         self.last_block.keepTx(self.txs)
         self.txs = []
 
@@ -162,6 +171,3 @@ c.transact(1, 8, amount=20, timestamp=14)
 c.transact(2, 9, amount=10, timestamp=14)
 c.transact(0, 3, amount=10, timestamp=8)
 c.transact(0, 4, amount=10, timestamp=5)
-
-print(c.addr)
-
