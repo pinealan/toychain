@@ -5,6 +5,8 @@ TODO:
     Implement server
     Consider generating address from private keys
     Consider private key cryptography for Tx verification
+    Consider hash object as abstraction over hash representation (like hashlib)
+    Separate hash byte representations and int representations
 '''
 
 import functools
@@ -59,34 +61,57 @@ class Tx:
         return functools.reduce(lambda x, y: HASH((x, y)), txs)
 
 
-class Block:
+class BlockHeader:
     '''Data structure for a Block
 
     Implements hashing. Defines byte size of data fields (attributes).
     '''
-    def __init__(self, prev_hash, timestamp, data):
-        self.prev_hash = prev_hash
-        self.timestamp = timestamp
-        self.data = data
-
-    def keepTx(self, txs):
-        self.txs = txs
+    def __init__(self, prevhash, roothash, timestamp, nouce):
+        self.prevhash   = prevhash
+        self.roothash   = roothash
+        self.timestamp  = timestamp
+        self.nouce      = nouce
+        self._hash      = None
 
     def __hash__(self):
         '''Memotization of hash value'''
-        try:
-            return self._hash
-        except AttributeError:
+        if not self._hash:
             self._hash = HASH((
-                self.prev_hash,
+                self.prevhash,
+                self.roothash,
                 self.timestamp,
-                self.data
+                self.nouce
             ))
-            return self._hash
+        return self._hash
+
+    @property
+    def hash(self):
+        return hash(self)
+
+    @property
+    def hexhash(self):
+        raise NotImplementedError
 
     def __repr__(self):
-        return 'Block(Hash: {}, Parent: {}, Payload: {}, Time: {})'.format(
-                self.__hash__(), self.prev_hash, self.data, self.timestamp)
+        return '{}({})'.format(
+                self.__class__.__name__,
+                self.hash,
+                self.prevhash,
+                self.timestamp)
+
+class Block:
+    def __init__(self, prevhash, roothash, timestamp, nouce, transactions=None):
+        self.header = BlockHeader(prevhash, roothash, timestamp, nouce)
+        self.transactions = transactions or []
+
+    def tx_count(self):
+        return len(self.transactions)
+
+    def __hash__(self):
+        return hash(self.header)
+
+    def __repr__(self):
+        return '{}({})'.format(self.__class__.__name__, hash(self))
 
 
 class Chain:
@@ -98,7 +123,7 @@ class Chain:
 
         Returns invalid chain by default (None addr).
         '''
-        self.blocks = [Block(0, timestamp, 0)]
+        self.blocks = [Block(0, 0, timestamp, 0, [])]
         self.txs    = []
         self.addr   = addr
 
@@ -117,7 +142,7 @@ class Chain:
             return False
 
     def isValidBlock(self, block, parent_block):
-        valid_hash = block.prev_hash == hash(parent_block)
+        valid_hash = block.prevhash == hash(parent_block)
         valid_time = block.timestamp >= parent_block.timestamp
         return valid_hash and valid_time
 
@@ -137,12 +162,11 @@ class Chain:
         self.txs.append(Tx)
 
         if len(self.txs) == self.tx_limit:
-            self.makeBlock()
+            self.makeBlock(timestamp)
 
     def makeBlock(self, timestamp):
         root_hash = Tx.hash_txs(*self.txs)
-        self.blocks.append(Block(self.last_hash, timestamp, root_hash))
-        self.last_block.keepTx(self.txs)
+        self.blocks.append(Block(self.last_hash, root_hash, timestamp, 0, self.txs))
         self.txs = []
 
     @property
@@ -160,7 +184,7 @@ addr = {
     1: 200,
     2: 50
 }
-c = Chain(addr)
+c = Chain(timestamp=0, addr=addr)
 c.transact(1, 2, amount=50, timestamp=10)
 c.transact(0, 3, amount=10, timestamp=11)
 c.transact(0, 4, amount=10, timestamp=12)
