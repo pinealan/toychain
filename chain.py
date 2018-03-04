@@ -24,19 +24,20 @@ TIME = lambda: int(time.time() * 1000) # millisecond
 
 
 class Tx:
-    '''Data structure for a Transaction.
+    '''A transaction.
 
-    Implements hashing. Defines byte size of data fields (attributes).
+    Attributes:
+        by, to: Sender and reciever of this transaction
+        amount: Value of credit being transacted
+        msg (optional): A string
     '''
-    addr_bytes = 128 # @Extract: make this a module variable instead?
-    coin_space = 256 # @Extract: make this a module variable instead?
-
-    def __init__(self, sender, receiver, amount, timestamp, msg=0):
-        self.sender     = sender
-        self.recver     = receiver
+    def __init__(self, by, to, amount, timestamp, msg=0):
+        self.by         = by
+        self.to         = to
         self.amount     = amount
         self.timestamp  = timestamp
         self.msg        = msg
+
 
     def __hash__(self):
         '''Memotization of hash value'''
@@ -44,27 +45,34 @@ class Tx:
             return self._hash
         except AttributeError:
             self._hash = HASH((
-                self.sender,
-                self.recver,
+                self.by,
+                self.to,
                 self.amount,
                 self.timestamp,
                 self.msg
             ))
             return self._hash
 
+
     def __repr__(self):
         return 'Tx(Hash: {}, Sender: {}, Receiver: {}, Amount: {}, Time: {})'.format(
-                self.__hash__(), self.sender, self.recver, self.amount, self.timestamp)
+                self.__hash__(), self.by, self.to, self.amount, self.timestamp)
+
 
     @classmethod
     def hash_txs(*txs):
         return functools.reduce(lambda x, y: HASH((x, y)), txs)
 
 
-class BlockHeader:
-    '''Data structure for a Block
 
-    Implements hashing. Defines byte size of data fields (attributes).
+class BlockHeader:
+    '''A block header. Contains all meta info in a block.
+
+    Attributes:
+        prevhash:   Hash of previous block
+        roothash:   Root hash of this block's transactions merkle tree
+        timestamp:  The block timestamp
+        nouce:      An integer
     '''
     def __init__(self, prevhash, roothash, timestamp, nouce):
         self.prevhash   = prevhash
@@ -72,6 +80,7 @@ class BlockHeader:
         self.timestamp  = timestamp
         self.nouce      = nouce
         self._hash      = None
+
 
     def __hash__(self):
         '''Memotization of hash value'''
@@ -84,13 +93,16 @@ class BlockHeader:
             ))
         return self._hash
 
+
     @property
     def hash(self):
         return hash(self)
 
+
     @property
     def hexhash(self):
         raise NotImplementedError
+
 
     def __repr__(self):
         return '{}({})'.format(
@@ -99,19 +111,31 @@ class BlockHeader:
                 self.prevhash,
                 self.timestamp)
 
+
+
 class Block:
+    '''A full block. Optionally contains a list of all transactions.
+
+    Attributes:
+        tx_count: Number of transactions in this block
+        transactions: List of all transactions
+    '''
     def __init__(self, prevhash, roothash, timestamp, nouce, transactions=None):
         self.header = BlockHeader(prevhash, roothash, timestamp, nouce)
         self.transactions = transactions or []
 
+
     def tx_count(self):
         return len(self.transactions)
+
 
     def __hash__(self):
         return hash(self.header)
 
+
     def __repr__(self):
         return '{}({})'.format(self.__class__.__name__, hash(self))
+
 
 
 class Chain:
@@ -127,51 +151,58 @@ class Chain:
         self.txs    = []
         self.addr   = addr
 
+
     def isValid(self):
         '''Check for chain validity'''
         return self.addr is not None
 
+
     def isValidTx(self, tx):
         '''Reject transaction if sender does not have enough credit.'''
         try:
-            if self.addr[tx.sender] < tx.amount:
+            if self.addr[tx.by] < tx.amount:
                 return False
             else:
                 return True
         except KeyError:
             return False
 
+
     def isValidBlock(self, block, parent_block):
         valid_hash = block.prevhash == hash(parent_block)
         valid_time = block.timestamp >= parent_block.timestamp
         return valid_hash and valid_time
 
-    def transact(self, sender, recver, amount, timestamp, msg=0):
-        '''Make transaction on chain.'''
-        tx = Tx(sender, recver, amount, timestamp, msg)
+
+    def transact(self, by, to, amount, timestamp, msg=0):
+        '''Record transaction on chain.'''
+        tx = Tx(by, to, amount, timestamp, msg)
 
         if not self.isValidTx(tx):
             raise ValueError
 
-        self.addr[tx.sender] -= amount
+        self.addr[tx.by] -= amount
         try:
-            self.addr[tx.recver] += amount
+            self.addr[tx.to] += amount
         except KeyError:
-            self.addr[tx.recver] = amount
+            self.addr[tx.to] = amount
 
         self.txs.append(Tx)
 
         if len(self.txs) == self.tx_limit:
             self.makeBlock(timestamp)
 
+
     def makeBlock(self, timestamp):
         root_hash = Tx.hash_txs(*self.txs)
         self.blocks.append(Block(self.last_hash, root_hash, timestamp, 0, self.txs))
         self.txs = []
 
+
     @property
     def last_hash(self):
         return hash(self.blocks[-1])
+
 
     @property
     def last_block(self):
