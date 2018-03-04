@@ -93,12 +93,12 @@ class Chain:
     '''High level interface (UX/UI) to the blockchain '''
     tx_limit = 10
 
-    def __init__(self, addr=None):
+    def __init__(self, timestamp, addr=None):
         '''Initialise new block chain, genesis block included.
 
         Returns invalid chain by default (None addr).
         '''
-        self.blocks = [Block(0, TIME(), 0)]
+        self.blocks = [Block(0, timestamp, 0)]
         self.txs    = []
         self.addr   = addr
 
@@ -116,8 +116,10 @@ class Chain:
         except KeyError:
             return False
 
-    def isValidBlock(self, block, parent):
-        return block.prev_hash == hash(parent)
+    def isValidBlock(self, block, parent_block):
+        valid_hash = block.prev_hash == hash(parent_block)
+        valid_time = block.timestamp >= parent_block.timestamp
+        return valid_hash and valid_time
 
     def transact(self, sender, recver, amount, timestamp, msg=0):
         '''Make transaction on chain.'''
@@ -137,11 +139,9 @@ class Chain:
         if len(self.txs) == self.tx_limit:
             self.makeBlock()
 
-    # @Hardcoded: time needs to use UTC time
-    # @Time: Should we use time anyway?
-    def makeBlock(self):
+    def makeBlock(self, timestamp):
         root_hash = Tx.hash_txs(*self.txs)
-        self.blocks.append(Block(self.last_hash, TIME(), root_hash))
+        self.blocks.append(Block(self.last_hash, timestamp, root_hash))
         self.last_block.keepTx(self.txs)
         self.txs = []
 
