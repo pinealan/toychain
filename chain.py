@@ -271,7 +271,7 @@ class Chain:
 
 # Demo
 for k in 'abcde':
-    key = [RSA.importKey(open(k + '.der', 'br').read()) for k in 'abcde']
+    key = [RSA.importKey(open(k + '.pem', 'br').read()) for k in 'abcde']
     pri = [key_to_private_hex(k) for k in key]
     pub = [key_to_public_hex(k) for k in key]
 
@@ -300,5 +300,3 @@ c.transact(key[3], pub[2], amount=20)
 
 c.transact(key[4], pub[0], amount=20)
 c.transact(key[4], pub[2], amount=10)
-
-print(c.addr)
